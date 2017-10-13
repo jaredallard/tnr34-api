@@ -8,66 +8,63 @@
 'use strict';
 
 const fs      = require('fs');
-const jsdom   = require('jsdom');
+const jsdom   = require("jsdom");
 const cors    = require('cors');
 const express = require('express');
+const jquery  = require('jquery')
+const debug   = require('debug')('tnr34')
 
 /* init the api */
-const app     = express();
+const app       = express();
+const { JSDOM } = jsdom;
 
 /* addons */
 app.use(cors());
-
-app.get('/jq', (req, res) => {
-  /* hacky method to return jq */
-  res.sendFile("jq.js", {
-    root: "./"
-  });
-})
 
 app.get('/search/:term/:page', (req, res) => {
   const term = req.params.term
   const page = req.params.page
 
   /* failsafe */
-  if (!term || term === '') {
+  if (!term || term == '' || term == ' ') {
     return res.send({
       success: false,
       message: "No term given"
     })
   }
 
+  const url = `http://rule34.paheal.net/post/list/${term}/${page}`
+
+  debug('get', url)
+
   // define the images table.
   const images = [];
-  jsdom.env(
-    "http://rule34.paheal.net/post/list/"+term+"/"+page,
-    ["http://127.0.0.1:3000/jq"],
-    (errors, window) => {
-      if (errors) {
-        console.log(errors)
-        res.send({
-          success:false,
-          message: "An error occured."
-        })
+  const dom = new JSDOM(``, {
+    url: url,
+    refferer: 'http://rule34.paheal.net',
+    resources: 'usable',
+    contentType: 'text/html',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'
+  })
 
-        // return false
-        return false;
-      }
+  const window = dom.window
+  const $ = jquery(window)
 
-      window.$("a:contains('Image Only')").each(function(key, value) {
-      	images.push(value.href);
-      });
+  console.log($('html').html())
 
-      // free the memory.
-      window.close()
+  $("a:contains('Image Only')").each((k,v) => {
+    debug('image-add', v.href)
+    images.push(v.href);
+  });
 
-      /* send the table of images found */
-      res.send({
-        success:true,
-        images: images
-      })
-    }
-  )
+  // free the memory.
+  window.close()
+
+  /* send the table of images found */
+  res.send({
+    success:true,
+    images: []
+  })
 });
 
 const server = app.listen(3000, function () {
